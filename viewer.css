@@ -1,17 +1,25 @@
-#viewer-controls {
+canvas {
     border:1px solid #999999;
-    float:left;
+}
+
+#viewer-controls {
     font-family:"Arial";
     font-size:13px;
+    width:800px;
 }
 
 .control-box {
-    float:left;
+    float:right;
     border:1px solid #999999;
+    border-right:none;
     text-align:center;
     height:150px;
     padding:10px;
     line-height:50px;
+}
+
+.control-box#last {
+    border-right:1px solid #999999;
 }
 
 .control-box p {

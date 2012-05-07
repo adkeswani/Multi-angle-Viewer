@@ -5,35 +5,31 @@
     <SCRIPT type="text/javascript" src="viewer.js"></SCRIPT>
     <LINK href="viewer.css" rel="stylesheet" type="text/css" />
 </HEAD>
-<BODY onLoad="initViewer(myDrawing, 'http://dl.dropbox.com/u/5997829/multiAngleViewer/', 'image', '-', 'jpg', 5, 6)">
+<BODY onLoad="initViewer(myDrawing, 'http://dl.dropbox.com/u/5997829/multiAngleViewer/', 'image', '-', 'jpg', 5, 6, noTransition)">
 
 <CANVAS id="myDrawing" width="800" height="500">
 <P>Requires HTML5</P>
 </CANVAS><BR/>
-
 <DIV id="viewer-controls">
 
-<DIV class="control-box">
-Multi-angle Viewer
-<P>Rotate through images of an object taken from multiple angles</P>
-</DIV>
-
-<DIV class="control-box">
+<DIV class="control-box" id="last">
+<BUTTON type="button" onclick="autoRotate()">Auto Rotate</BUTTON>
 <P>&nbsp;</P>
-<BUTTON type="button" onclick="autoRotate()">Auto</BUTTON>
+<BUTTON type="button" onclick="resetTransforms()">Reset P/Z</BUTTON>
 </DIV>
 
 <DIV class="control-box">
-<BUTTON type="button" class="middle-up-down" onclick="pan(0, 50)"/>Up</BUTTON>
-<P class="button-spacer"><BUTTON type="button" onclick="pan(50, 0)"/>Left</BUTTON><SPAN class="control-name">Pan</SPAN><BUTTON type="button" onclick="pan(-50, 0)"/>Right</BUTTON></P>
-<BUTTON type="button" class="middle-up-down" onclick="pan(0, -50)"/>Down</BUTTON>
-</DIV>
-
-<DIV class="control-box">
-<BUTTON type="button" class="middle-up-down" onclick="rotate(0, -1)"/>Up</BUTTON>
+<BUTTON type="button" class="middle-up-down" onclick="rotate(0, 1)"/>Up</BUTTON>
 <P class="button-spacer"><BUTTON type="button" onclick="rotate(-1, 0)"/>Left</BUTTON><SPAN class="control-name">Rotate</SPAN><BUTTON type="button" onclick="rotate(1, 0)"/>Right</BUTTON></P>
-<BUTTON type="button" class="middle-up-down" onclick="rotate(0, 1)"/>Down</BUTTON>
+<BUTTON type="button" class="middle-up-down" onclick="rotate(0, -1)"/>Down</BUTTON>
 </DIV>
+
+<DIV class="control-box">
+<BUTTON type="button" class="middle-up-down" onclick="pan(0, -50)"/>Up</BUTTON>
+<P class="button-spacer"><BUTTON type="button" onclick="pan(-50, 0)"/>Left</BUTTON><SPAN class="control-name">Pan</SPAN><BUTTON type="button" onclick="pan(50, 0)"/>Right</BUTTON></P>
+<BUTTON type="button" class="middle-up-down" onclick="pan(0, 50)"/>Down</BUTTON>
+</DIV>
+
 
 <DIV class="control-box">
 <BUTTON type="button" onclick="zoom(1.2)"/>Zoom In</BUTTON><BR/>
