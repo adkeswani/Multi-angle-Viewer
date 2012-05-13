@@ -13,28 +13,28 @@
 <DIV id="viewer-controls">
 
 <DIV class="control-box" id="last">
-<BUTTON type="button" onclick="autoRotate()">Auto Rotate</BUTTON>
+<BUTTON type="button" id="autorotate" onclick="document.getElementById('autorotate').innerHTML='Auto Rotate Off'; autoRotate()">Auto Rotate On</BUTTON>
 <P>&nbsp;</P>
-<BUTTON type="button" onclick="resetTransforms()">Reset P/Z</BUTTON>
+<BUTTON type="button" onclick="resetTransforms()">Reset Pan/Zoom</BUTTON>
 </DIV>
 
 <DIV class="control-box">
-<BUTTON type="button" class="middle-up-down" onclick="rotate(0, 1)"/>Up</BUTTON>
-<P class="button-spacer"><BUTTON type="button" onclick="rotate(-1, 0)"/>Left</BUTTON><SPAN class="control-name">Rotate</SPAN><BUTTON type="button" onclick="rotate(1, 0)"/>Right</BUTTON></P>
-<BUTTON type="button" class="middle-up-down" onclick="rotate(0, -1)"/>Down</BUTTON>
+<BUTTON type="button" class="direction middle-up-down" onclick="rotate(0, 1)"/>Up</BUTTON>
+<P class="button-spacer"><BUTTON type="button" class="direction" onclick="rotate(-1, 0)"/>Left</BUTTON><SPAN class="control-name">Rotate</SPAN><BUTTON type="button" class="direction" onclick="rotate(1, 0)"/>Right</BUTTON></P>
+<BUTTON type="button" class="direction middle-up-down" onclick="rotate(0, -1)"/>Down</BUTTON>
 </DIV>
 
 <DIV class="control-box">
-<BUTTON type="button" class="middle-up-down" onclick="pan(0, -50)"/>Up</BUTTON>
-<P class="button-spacer"><BUTTON type="button" onclick="pan(-50, 0)"/>Left</BUTTON><SPAN class="control-name">Pan</SPAN><BUTTON type="button" onclick="pan(50, 0)"/>Right</BUTTON></P>
-<BUTTON type="button" class="middle-up-down" onclick="pan(0, 50)"/>Down</BUTTON>
+<BUTTON type="button" class="direction middle-up-down" onclick="pan(0, -50)"/>Up</BUTTON>
+<P class="button-spacer"><BUTTON type="button" class="direction" onclick="pan(-50, 0)"/>Left</BUTTON><SPAN class="control-name">Pan</SPAN><BUTTON type="button" class="direction" onclick="pan(50, 0)"/>Right</BUTTON></P>
+<BUTTON type="button" class="direction middle-up-down" onclick="pan(0, 50)"/>Down</BUTTON>
 </DIV>
 
 
 <DIV class="control-box">
-<BUTTON type="button" onclick="zoom(1.2)"/>Zoom In</BUTTON><BR/>
+<BUTTON type="button" class="direction" onclick="zoom(1.2)"/>Zoom In</BUTTON><BR/>
 <SPAN class="control-name">Zoom</SPAN><BR/>
-<BUTTON type="button" onclick="zoom(0.8)"/>Zoom Out</BUTTON>
+<BUTTON type="button" class="direction" onclick="zoom(0.8)"/>Zoom Out</BUTTON>
 </DIV>
 
 </DIV>
