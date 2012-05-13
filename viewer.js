@@ -18,6 +18,8 @@ var panDragDistance;
 var dragStart;
 var numAutoRotations;
 var transition;
+var prevImg;
+var transitioning;
 
 //Shim = uses JS, then browser-specific, then HTML5 once available
 //Returns a function that when called will do the timeout!
@@ -247,13 +249,13 @@ function mod(a, b) {
     return result;
 }
 
-function drawCurrImg(withTransition) {
+function drawCurrImg(withTransition, xTransitionDirection, yTransitionDirection) {
     loading = false;
     if (currImg.hasLoaded) {
         if (withTransition) {
-            transition();
+            transition(xTransitionDirection, yTransitionDirection);
         } else {
-            noTransition();
+            noTransition(xTransitionDirection, yTransitionDirection);
         }
     } else {
         loading = true;
@@ -278,9 +280,10 @@ function loadingAnimation() {
 
 function rotate(numXRotations, numYRotations) {
     currImgIndex = [mod(currImgIndex[0] - numXRotations, numImgs[0]), mod(currImgIndex[1] - numYRotations, numImgs[1])];
+    prevImg = currImg;
     currImg = imgs[currImgIndex[0]][currImgIndex[1]];
     preloadImgs();
-    drawCurrImg(true);
+    drawCurrImg(true, numXRotations, numYRotations);
 }
 
 function pan(xDistance, yDistance) {
@@ -295,10 +298,107 @@ function zoom(amount) {
     drawCurrImg(false);
 }
 
-function noTransition() {
+function noTransition(xTransitionDirection, yTransitionDirection) {
     window.cc.save();
         window.cc.setTransform(1, 0, 0, 1, 0, 0);
         window.cc.clearRect(0, 0, window.cc.canvas.clientWidth, window.cc.canvas.clientHeight);
     window.cc.restore();
     window.cc.drawImage(currImg, imgTopLeft[0], imgTopLeft[1]);
+}
+
+var prevOpacity;
+var currOpacity;
+
+function fadeTransition(xTransitionDirection, yTransitionDirection) {
+    prevOpacity = 1.0;
+    currOpacity = 0.0;
+    requestAnimFrame(doFadeTransition);
+}
+
+function doFadeTransition() {
+    //opacities are opposites of each other, e.g. 0.4 and 0.6, can just use one var
+    window.cc.save();
+        window.cc.setTransform(1, 0, 0, 1, 0, 0);
+        window.cc.clearRect(0, 0, window.cc.canvas.clientWidth, window.cc.canvas.clientHeight);
+    window.cc.restore();
+
+    if (prevImg) {
+        window.cc.globalAlpha = prevOpacity;
+        window.cc.drawImage(prevImg, imgTopLeft[0], imgTopLeft[1]);
+        prevOpacity = prevOpacity - 0.1;
+    }
+
+    window.cc.globalAlpha = currOpacity;
+    window.cc.drawImage(currImg, imgTopLeft[0], imgTopLeft[1]);
+    currOpacity = currOpacity + 0.1;
+
+    window.cc.globalAlpha = 1.0;
+
+    if (currOpacity <= 1.0) {
+        requestAnimFrame(doFadeTransition);
+    }
+}
+
+var prevScale;
+var currScale;
+var xDirection;
+var yDirection;
+
+function directionalFadeTransition(xTransitionDirection, yTransitionDirection) {
+    prevOpacity = 1.0;
+    currOpacity = 0.0;
+    prevScale = 1.0;
+    currScale = 0.0;
+    xDirection = xTransitionDirection;
+    yDirection = yTransitionDirection;
+    requestAnimFrame(doDirectionalFadeTransition);
+
+}
+
+function doDirectionalFadeTransition() {
+    window.cc.save();
+        window.cc.setTransform(1, 0, 0, 1, 0, 0);
+        window.cc.clearRect(0, 0, window.cc.canvas.clientWidth, window.cc.canvas.clientHeight);
+    window.cc.restore();
+
+    if (prevImg) {
+        var prevOrigin = [imgTopLeft[0], imgTopLeft[1]];
+        //Right and up are +ve
+        if (xDirection > 0) {
+            prevOrigin[0] = prevOrigin[0] + (1 - prevScale) * prevImg.naturalWidth;
+        } else if (yDirection < 0) {
+            prevOrigin[1] = prevOrigin[1] + (1 - prevScale) * prevImg.naturalHeight;
+        }
+        window.cc.globalAlpha = prevOpacity;
+            if (xDirection != 0) {
+                window.cc.drawImage(prevImg, 0, 0, prevImg.naturalWidth, prevImg.naturalHeight, prevOrigin[0], prevOrigin[1], prevScale * prevImg.naturalWidth, currImg.naturalHeight);
+            } else if (yDirection != 0) {
+                window.cc.drawImage(prevImg, 0, 0, prevImg.naturalWidth, prevImg.naturalHeight, prevOrigin[0], prevOrigin[1], currImg.naturalWidth, prevScale * prevImg.naturalHeight);
+            }
+            prevScale = prevScale - 0.1;
+
+            prevOpacity = prevOpacity - 0.1;
+        window.cc.globalAlpha = 1.0;
+    }
+
+    var currOrigin = [imgTopLeft[0], imgTopLeft[1]];
+    if (xDirection < 0) {
+        currOrigin[0] = currOrigin[0] + (1 - currScale) * prevImg.naturalWidth;
+    } else if (yDirection > 0) {
+        currOrigin[1] = currOrigin[1] + (1 - currScale) * prevImg.naturalHeight;
+    }
+
+    window.cc.globalAlpha = currOpacity;
+        if (xDirection != 0) {
+            window.cc.drawImage(currImg, 0, 0, currImg.naturalWidth, currImg.naturalHeight, currOrigin[0], currOrigin[1], currScale * currImg.naturalWidth, currImg.naturalHeight);
+        } else if (yDirection != 0) {
+            window.cc.drawImage(currImg, 0, 0, currImg.naturalWidth, currImg.naturalHeight, currOrigin[0], currOrigin[1], currImg.naturalWidth, currScale * currImg.naturalHeight);
+        }
+        currOpacity = currOpacity + 0.1;
+        currScale = currScale + 0.1;
+    window.cc.globalAlpha = 1.0;
+
+    if (currOpacity <= 1.0) {
+        requestAnimFrame(doDirectionalFadeTransition);
+    }
 }
