@@ -2,8 +2,21 @@
 <HTML>
 <TITLE>Multi-angle Viewer</TITLE>
 <HEAD>
-    <SCRIPT type="text/javascript" src="viewer.js"></SCRIPT>
-    <LINK href="test.css" rel="stylesheet" type="text/css" />
+<SCRIPT type="text/javascript" src="viewer.js"></SCRIPT>
+<LINK href="test.css" rel="stylesheet" type="text/css" />
+<SCRIPT type="text/javascript">
+<!--
+    function toggleAutoRotate() {
+        if (document.getElementById('autorotate').innerHTML == 'Auto Rotate On') {
+            autoRotateOn();
+            document.getElementById('autorotate').innerHTML='Auto Rotate Off';
+        } else {
+            autoRotateOff();
+            document.getElementById('autorotate').innerHTML='Auto Rotate On';
+        }
+    }
+//-->
+</SCRIPT>
 </HEAD>
 <BODY onLoad="initViewer(myDrawing, 'http://dl.dropbox.com/u/5997829/multiAngleViewer/', 'image', '-', 'jpg', 5, 6, directionalFadeTransition)">
 
@@ -13,9 +26,9 @@
 <DIV id="viewer-controls">
 
 <DIV class="control-box" id="last">
-<BUTTON type="button" id="autorotate" onclick="document.getElementById('autorotate').innerHTML='Auto Rotate Off'; autoRotate()">Auto Rotate On</BUTTON>
+<BUTTON type="button" id="autorotate" onclick="toggleAutoRotate();">Auto Rotate On</BUTTON>
 <P>&nbsp;</P>
-<BUTTON type="button" onclick="resetTransforms()">Reset Pan/Zoom</BUTTON>
+<BUTTON type="button" onclick="resetPanAndZoom()">Reset Pan/Zoom</BUTTON>
 </DIV>
 
 <DIV class="control-box">

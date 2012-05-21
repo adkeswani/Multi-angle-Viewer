@@ -8,18 +8,17 @@ var currImg;
 var currZoom;
 var imgTopLeft;
 var loadingImg;
-var loadingAnimFrame;
-var loading;
-var waitingForFirstImage;
+var canvasUninitialised;
 var rotateDragStarted;
 var panDragStarted;
 var rotateDragDistance;
 var panDragDistance;
 var dragStart;
-var numAutoRotations;
 var transition;
 var prevImg;
 var transitioning;
+var loadingTimer;
+var autoRotationTimer;
 
 //Shim = uses JS, then browser-specific, then HTML5 once available
 //Returns a function that when called will do the timeout!
@@ -34,20 +33,23 @@ window.requestAnimFrame = (function() {
             };
 })();
 
+//Initialises the viewer, must be called before viewer can be used
 function initViewer(canvas, _path, _basename, _separator, _extension, numXImages, numYImages, _transition) {
+    //Check if canvas is given and valid
     if (canvas && canvas.getContext) {
         window.cc = canvas.getContext('2d');
     } else {
         return;
     }
 
+    //Load images
     path = _path;
     basename = _basename;
     separator = _separator;
     extension = _extension;
 
     numImgs = [numXImages, numYImages];
-    currImgIndex = [0,0];
+    currImgIndex = [0, 0];
 
     imgs = new Array(numXImages)
     for (var i = 0; i < numXImages; i++) {
@@ -63,12 +65,13 @@ function initViewer(canvas, _path, _basename, _separator, _extension, numXImages
     loadingImg = new Image();
     loadingImg.src = 'loading.png';
 
+    //Set up mouse events
     window.cc.canvas.onmousedown = startDrag;
     window.cc.canvas.onmousemove = doDrag;
     window.cc.canvas.onmouseup = stopDrag;
     window.cc.canvas.onmouseout = stopDrag;
 
-    //Courtesy of http://www.experts-exchange.com/Programming/Languages/Scripting/JavaScript/A_2281-Mouse-Wheel-Programming-in-JavaScript.html
+    //This block from http://www.experts-exchange.com/Programming/Languages/Scripting/JavaScript/A_2281-Mouse-Wheel-Programming-in-JavaScript.html
     if (window.cc.canvas.addEventListener) {
         window.cc.canvas.addEventListener('DOMMouseScroll', mouseZoom, false);
         window.cc.canvas.addEventListener('mousewheel', mouseZoom, false);
@@ -77,20 +80,122 @@ function initViewer(canvas, _path, _basename, _separator, _extension, numXImages
         window.cc.canvas.onmousewheel = mouseZoom;
     }
 
-    numAutoRotations = 0;
-
     transition = _transition;
 
+    //Display first image
     imgTopLeft = [0, 0];
     preloadImgs();
-    waitingForFirstImage = true;
-    drawCurrImg(false);
+    canvasUninitialised = true;
+    drawCurrImg(0, 0);
+}
+
+function initCanvas() {
+    //Choose zoom level to fit image inside canvas
+    currZoom = 1.0;
+    var fitWidthScale = window.cc.canvas.clientWidth / imgs[0][0].naturalWidth;
+    var fitHeightScale = window.cc.canvas.clientHeight / imgs[0][0].naturalHeight;
+    if (fitWidthScale < fitHeightScale) {
+        currZoom = fitWidthScale;
+    } else {
+        currZoom = fitHeightScale;
+    }
+    window.cc.scale(currZoom, currZoom);
+
+    //Move (0,0) from top-left of canvas to centre
+    window.cc.translate(window.cc.canvas.clientWidth / currZoom / 2, window.cc.canvas.clientHeight / currZoom / 2);
+
+    //Find where top-left of image should be positioned
+    imgTopLeft = [-imgs[0][0].naturalWidth / 2, -imgs[0][0].naturalHeight / 2];
+}
+
+//Draws the current image with or without a transition or starts loading animation if it has not loaded
+function drawCurrImg(xTransitionDirection, yTransitionDirection) {
+    window.clearTimeout(loadingTimer);
+    if (currImg.hasLoaded) {
+        if (xTransitionDirection != 0 || yTransitionDirection != 0) {
+            transition(xTransitionDirection, yTransitionDirection);
+        } else {
+            noTransition();
+        }
+    } else {
+        //This prevents transition from occurring!
+        loadingAnimation(0);
+    }
+}
+
+//Loads the current image and the 4 adjacent to it
+function preloadImgs() {
+    var loadingImgs = [
+        [currImgIndex[0], currImgIndex[1]],
+        [mod(currImgIndex[0] - 1, numImgs[0]), currImgIndex[1]],
+        [mod(currImgIndex[0] + 1, numImgs[0]), currImgIndex[1]],
+        [currImgIndex[0], mod(currImgIndex[1] - 1, numImgs[1])],
+        [currImgIndex[0], mod(currImgIndex[1] + 1, numImgs[1])],
+    ]
+        
+    for (var i = 0; i < loadingImgs.length; i++) {
+        var currLoadingImg = imgs[loadingImgs[i][0]][loadingImgs[i][1]];
+        if (!currLoadingImg.src) {
+            currLoadingImg.onload = imgLoad;
+            currLoadingImg.src = path + basename + separator + loadingImgs[i][0] + separator + loadingImgs[i][1] + '.' + extension;
+        }
+    }
+}
+
+//Called whenever an image finishes loading
+function imgLoad(e) {
+    //Mark that image is now loaded
+    var target = e.currentTarget || e.srcElement;
+    target.hasLoaded = true;
+
+    //If target is current image, draw it to the canvas
+    if (target.indices[0] == currImgIndex[0] && target.indices[1] == currImgIndex[1]) {
+        window.clearTimeout(loadingTimer);
+        if (canvasUninitialised) {
+            initCanvas();
+            canvasUninitialised = false;
+        }
+        drawCurrImg(0, 0);
+    }
+}
+
+function loadingAnimation(frame) {
+    window.cc.save();
+        window.cc.setTransform(1, 0, 0, 1, 0, 0);
+        window.cc.drawImage(loadingImg, 31 * frame, 0, 31, 31, 0, 0, 31, 31);
+    window.cc.restore();
+
+    loadingTimer = window.setTimeout(function() { loadingAnimation(mod(frame + 1, 8)) }, 1000 / 8);
+}
+
+function clearImage() {
+    window.cc.clearRect(imgTopLeft[0], imgTopLeft[1], currImg.naturalWidth / currZoom, currImg.naturalHeight / currZoom);
+}
+
+function rotate(numXRotations, numYRotations) {
+    currImgIndex = [mod(currImgIndex[0] - numXRotations, numImgs[0]), mod(currImgIndex[1] - numYRotations, numImgs[1])];
+    prevImg = currImg;
+    currImg = imgs[currImgIndex[0]][currImgIndex[1]];
+    preloadImgs();
+    drawCurrImg(numXRotations, numYRotations);
+}
+
+function pan(xDistance, yDistance) {
+    imgTopLeft = [imgTopLeft[0] + xDistance / currZoom, imgTopLeft[1] + yDistance / currZoom];
+    drawCurrImg(0, 0);
+}
+
+function zoom(amount) {
+    window.cc.clearRect(imgTopLeft[0], imgTopLeft[1], currImg.naturalWidth, currImg.naturalHeight);
+    window.cc.scale(amount,amount);
+    currZoom = currZoom * amount;
+    drawCurrImg(0, 0);
 }
 
 function mouseZoom(e) {
     var nDelta = 0;
 
-    //Courtesy of http://www.experts-exchange.com/Programming/Languages/Scripting/JavaScript/A_2281-Mouse-Wheel-Programming-in-JavaScript.html
+    //This block from http://www.experts-exchange.com/Programming/Languages/Scripting/JavaScript/A_2281-Mouse-Wheel-Programming-in-JavaScript.html
     if (e.wheelDelta) {
         nDelta = e.wheelDelta;
         if (window.opera) {
@@ -100,7 +205,6 @@ function mouseZoom(e) {
         nDelta = -e.detail;
     }
     
-    //Maybe want to try doing this about the current location of the mouse?
     if (nDelta > 0) {
         zoom(1.2);
     } else {
@@ -164,138 +268,34 @@ function stopDrag(e) {
     panDragStarted = false;
 }
 
-function initCanvas() {
-    //Fit image inside canvas to begin, leaves (0,0) at top-left
-    currZoom = 1.0;
-    var fitWidthScale = window.cc.canvas.clientWidth / imgs[0][0].naturalWidth;
-    var fitHeightScale = window.cc.canvas.clientHeight / imgs[0][0].naturalHeight;
-    if (fitWidthScale < fitHeightScale) {
-        currZoom = fitWidthScale;
-    } else {
-        currZoom = fitHeightScale;
-    }
-    window.cc.scale(currZoom, currZoom);
-
-    //Move (0,0) to centre of canvas
-    window.cc.translate(window.cc.canvas.clientWidth / currZoom / 2, window.cc.canvas.clientHeight / currZoom / 2);
-
-    //Find where top-left of image should be positioned
-    //This will always centre the image about (0,0)
-    imgTopLeft = [-imgs[0][0].naturalWidth / 2, -imgs[0][0].naturalHeight / 2];
-}
-
-function resetTransforms() {
+function resetPanAndZoom() {
     window.cc.setTransform(1, 0, 0, 1, 0, 0);
     initCanvas();
-    drawCurrImg(false);
+    drawCurrImg(0, 0);
 }
 
-function imgLoad(e) {
-    var target = e.currentTarget || e.srcElement;
-    target.hasLoaded = true;
-    loading = false;
-    //if target is current image, draw it up
-    if ((target.indices[0] == currImgIndex[0]) && (target.indices[1] == currImgIndex[1])) {
-        if (waitingForFirstImage) {
-            waitingForFirstImage = false;
-            initCanvas();
-        }
-        drawCurrImg(false);
-    }
+function autoRotateOn() {
+    autoRotationTimer = window.setTimeout(function() { autoRotate(0) }, 3000);
+    //Disable all rotation buttons?
 }
 
-function autoRotate() {
+function autoRotateOff() {
+    window.clearTimeout(autoRotationTimer);
+}
+
+function autoRotate(numRotations) {
     if (currImg.hasLoaded) {
-        window.setTimeout(doAutoRotate, 3000);
-    } else {
-        window.setTimeout(autoRotate, 100); //Not sure if this is working :/, can't tell
-    }
-}
-
-function doAutoRotate() {
-    if (numAutoRotations == numImgs[0]) {
-        rotate(0, -1);
-        numAutoRotations = 0;
-    } else {
-        rotate(1, 0)
-        numAutoRotations = numAutoRotations + 1;
-    }
-    autoRotate();
-}
-
-function preloadImgs() {
-    var loadingImgs = [
-        [currImgIndex[0], currImgIndex[1]],
-        [mod(currImgIndex[0] - 1, numImgs[0]), currImgIndex[1]],
-        [mod(currImgIndex[0] + 1, numImgs[0]), currImgIndex[1]],
-        [currImgIndex[0], mod(currImgIndex[1] - 1, numImgs[1])],
-        [currImgIndex[0], mod(currImgIndex[1] + 1, numImgs[1])],
-    ]
-        
-    for (var i = 0; i < loadingImgs.length; i++) {
-        var currLoadingImg = imgs[loadingImgs[i][0]][loadingImgs[i][1]];
-        if (!currLoadingImg.src) {
-            currLoadingImg.onload = imgLoad;
-            currLoadingImg.src = path + basename + separator + loadingImgs[i][0] + separator + loadingImgs[i][1] + '.' + extension;
-        }
-    }
-}
-
-function mod(a, b) {
-    var result = a % b;
-    if (result < 0) {
-        result = result + b
-    }
-    return result;
-}
-
-function drawCurrImg(withTransition, xTransitionDirection, yTransitionDirection) {
-    loading = false;
-    if (currImg.hasLoaded) {
-        if (withTransition) {
-            transition(xTransitionDirection, yTransitionDirection);
+        if (numRotations == numImgs[0]) {
+            rotate(0, -1);
+            numRotations = 0;
         } else {
-            noTransition(xTransitionDirection, yTransitionDirection);
+            rotate(1, 0)
+            numRotations = numRotations + 1;
         }
+        autoRotationTimer = window.setTimeout(function() { autoRotate(numRotations) }, 3000);
     } else {
-        loading = true;
-        loadingAnimFrame = 0;
-        loadingAnimation();
+        autoRotationTimer = window.setTimeout(function() { autoRotate(numRotations) }, 100); //Not sure if this is working :/, can't tell
     }
-}
-
-function loadingAnimation() {
-    if (!loading) {
-        return
-    }
-
-    window.setTimeout(loadingAnimation, 1000 / 8);
-    loadingAnimFrame = mod(loadingAnimFrame + 1, 8);
-
-    window.cc.save();
-        window.cc.setTransform(1, 0, 0, 1, 0, 0);
-        window.cc.drawImage(loadingImg, 31 * loadingAnimFrame, 0, 31, 31, 0, 0, 31, 31);
-    window.cc.restore();
-}
-
-function rotate(numXRotations, numYRotations) {
-    currImgIndex = [mod(currImgIndex[0] - numXRotations, numImgs[0]), mod(currImgIndex[1] - numYRotations, numImgs[1])];
-    prevImg = currImg;
-    currImg = imgs[currImgIndex[0]][currImgIndex[1]];
-    preloadImgs();
-    drawCurrImg(true, numXRotations, numYRotations);
-}
-
-function pan(xDistance, yDistance) {
-    imgTopLeft = [imgTopLeft[0] + xDistance / currZoom, imgTopLeft[1] + yDistance / currZoom];
-    drawCurrImg(false);
-}
-
-function zoom(amount) {
-    window.cc.clearRect(imgTopLeft[0], imgTopLeft[1], currImg.naturalWidth, currImg.naturalHeight);
-    window.cc.scale(amount,amount);
-    currZoom = currZoom * amount;
-    drawCurrImg(false);
 }
 
 function noTransition(xTransitionDirection, yTransitionDirection) {
@@ -356,10 +356,11 @@ function directionalFadeTransition(xTransitionDirection, yTransitionDirection) {
 }
 
 function doDirectionalFadeTransition() {
-    window.cc.save();
-        window.cc.setTransform(1, 0, 0, 1, 0, 0);
-        window.cc.clearRect(0, 0, window.cc.canvas.clientWidth, window.cc.canvas.clientHeight);
-    window.cc.restore();
+    //window.cc.save();
+    //    window.cc.setTransform(1, 0, 0, 1, 0, 0);
+    //    window.cc.clearRect(0, 0, window.cc.canvas.clientWidth, window.cc.canvas.clientHeight);
+    //window.cc.restore();
+    clearImage();
 
     if (prevImg) {
         var prevOrigin = [imgTopLeft[0], imgTopLeft[1]];
@@ -402,3 +403,13 @@ function doDirectionalFadeTransition() {
         requestAnimFrame(doDirectionalFadeTransition);
     }
 }
+
+function mod(a, b) {
+    var result = a % b;
+    if (result < 0) {
+        result = result + b
+    }
+    return result;
+}
+
+
