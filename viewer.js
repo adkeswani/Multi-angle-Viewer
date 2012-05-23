@@ -19,19 +19,13 @@ var prevImg;
 var transitioning;
 var loadingTimer;
 var autoRotationTimer;
+var transitionTimerOrId;
 
-//Shim = uses JS, then browser-specific, then HTML5 once available
-//Returns a function that when called will do the timeout!
-window.requestAnimFrame = (function() {
-    return  window.requestAnimationFrame       || 
-            window.webkitRequestAnimationFrame || 
-            window.mozRequestAnimationFrame    || 
-            window.oRequestAnimationFrame      || 
-            window.msRequestAnimationFrame     || 
-            function(callback) {
-                window.setTimeout(callback, 1000 / 60);
-            };
-})();
+
+
+/*
+INITIALISATION
+*/
 
 //Initialises the viewer, must be called before viewer can be used
 function initViewer(canvas, _path, _basename, _separator, _extension, numXImages, numYImages, _transition) {
@@ -89,6 +83,7 @@ function initViewer(canvas, _path, _basename, _separator, _extension, numXImages
     drawCurrImg(0, 0);
 }
 
+//Initialises the canvas, called only after the first image has loaded and for resetting pan and zoom
 function initCanvas() {
     //Choose zoom level to fit image inside canvas
     currZoom = 1.0;
@@ -108,17 +103,30 @@ function initCanvas() {
     imgTopLeft = [-imgs[0][0].naturalWidth / 2, -imgs[0][0].naturalHeight / 2];
 }
 
+
+
+/*
+DRAWING AND LOADING IMAGES
+*/
+
 //Draws the current image with or without a transition or starts loading animation if it has not loaded
 function drawCurrImg(xTransitionDirection, yTransitionDirection) {
     window.clearTimeout(loadingTimer);
     if (currImg.hasLoaded) {
+        //Cancel existing transition
+        if (window.cancelAnimationFrame) {
+            window.cancelAnimationFrame(transitionTimerOrId);
+        } else {
+            window.clearTimeout(transitionTimerOrId);
+        }
+
         if (xTransitionDirection != 0 || yTransitionDirection != 0) {
             transition(xTransitionDirection, yTransitionDirection);
         } else {
             noTransition();
         }
     } else {
-        //This prevents transition from occurring!
+        //TODO: This prevents transition from occurring!
         loadingAnimation(0);
     }
 }
@@ -150,13 +158,23 @@ function imgLoad(e) {
 
     //If target is current image, draw it to the canvas
     if (target.indices[0] == currImgIndex[0] && target.indices[1] == currImgIndex[1]) {
-        window.clearTimeout(loadingTimer);
+        stopLoadingAnimation();
+
         if (canvasUninitialised) {
             initCanvas();
             canvasUninitialised = false;
         }
         drawCurrImg(0, 0);
     }
+}
+
+function stopLoadingAnimation() {
+    window.clearTimeout(loadingTimer);
+
+    window.cc.save();
+        window.cc.setTransform(1, 0, 0, 1, 0, 0);
+        window.cc.clearRect(0, 0, 31, 31);
+    window.cc.restore();
 }
 
 function loadingAnimation(frame) {
@@ -168,9 +186,15 @@ function loadingAnimation(frame) {
     loadingTimer = window.setTimeout(function() { loadingAnimation(mod(frame + 1, 8)) }, 1000 / 8);
 }
 
-function clearImage() {
+function clearImg() {
     window.cc.clearRect(imgTopLeft[0], imgTopLeft[1], currImg.naturalWidth / currZoom, currImg.naturalHeight / currZoom);
 }
+
+
+
+/*
+TRANSFORMATIONS
+*/
 
 function rotate(numXRotations, numYRotations) {
     currImgIndex = [mod(currImgIndex[0] - numXRotations, numImgs[0]), mod(currImgIndex[1] - numYRotations, numImgs[1])];
@@ -191,6 +215,12 @@ function zoom(amount) {
     currZoom = currZoom * amount;
     drawCurrImg(0, 0);
 }
+
+
+
+/*
+MOUSE EVENTS
+*/
 
 function mouseZoom(e) {
     var nDelta = 0;
@@ -213,7 +243,7 @@ function mouseZoom(e) {
 }
 
 function startDrag(e) {
-    //Might need something else for IE8, different button indexes
+    //TODO: IE8 may have different button indexes
     if (e.button == 0) {
         rotateDragStarted = true;
         panDragStarted = false;
@@ -268,6 +298,12 @@ function stopDrag(e) {
     panDragStarted = false;
 }
 
+
+
+/*
+AUTO-ROTATE AND OTHER
+*/
+
 function resetPanAndZoom() {
     window.cc.setTransform(1, 0, 0, 1, 0, 0);
     initCanvas();
@@ -298,6 +334,13 @@ function autoRotate(numRotations) {
     }
 }
 
+
+
+/*
+TRANSITIONS
+*/
+
+//Changes straight to the next image
 function noTransition(xTransitionDirection, yTransitionDirection) {
     window.cc.save();
         window.cc.setTransform(1, 0, 0, 1, 0, 0);
@@ -306,26 +349,18 @@ function noTransition(xTransitionDirection, yTransitionDirection) {
     window.cc.drawImage(currImg, imgTopLeft[0], imgTopLeft[1]);
 }
 
-var prevOpacity;
-var currOpacity;
-
+//Fades between images
 function fadeTransition(xTransitionDirection, yTransitionDirection) {
-    prevOpacity = 1.0;
-    currOpacity = 0.0;
-    requestAnimFrame(doFadeTransition);
+    var currOpacity = 0.0;
+    transitionTimerOrId = requestAnimFrame(function() { doFadeTransition(currOpacity) } );
 }
 
-function doFadeTransition() {
-    //opacities are opposites of each other, e.g. 0.4 and 0.6, can just use one var
-    window.cc.save();
-        window.cc.setTransform(1, 0, 0, 1, 0, 0);
-        window.cc.clearRect(0, 0, window.cc.canvas.clientWidth, window.cc.canvas.clientHeight);
-    window.cc.restore();
+function doFadeTransition(currOpacity) {
+    clearImg();
 
     if (prevImg) {
-        window.cc.globalAlpha = prevOpacity;
+        window.cc.globalAlpha = 1.0 - currOpacity;
         window.cc.drawImage(prevImg, imgTopLeft[0], imgTopLeft[1]);
-        prevOpacity = prevOpacity - 0.1;
     }
 
     window.cc.globalAlpha = currOpacity;
@@ -335,74 +370,69 @@ function doFadeTransition() {
     window.cc.globalAlpha = 1.0;
 
     if (currOpacity <= 1.0) {
-        requestAnimFrame(doFadeTransition);
+        transitionTimerOrId = requestAnimFrame(function() { doFadeTransition(currOpacity) });
     }
 }
 
-var prevScale;
-var currScale;
-var xDirection;
-var yDirection;
-
+//Fades between images while scaling in the direction of rotation
 function directionalFadeTransition(xTransitionDirection, yTransitionDirection) {
-    prevOpacity = 1.0;
-    currOpacity = 0.0;
-    prevScale = 1.0;
-    currScale = 0.0;
-    xDirection = xTransitionDirection;
-    yDirection = yTransitionDirection;
-    requestAnimFrame(doDirectionalFadeTransition);
+    var currOpacity = 0.0;
+    var currScale = 0.0;
+    transitionTimerOrId = requestAnimFrame(function() { doDirectionalFadeTransition(currOpacity, currScale, xTransitionDirection, yTransitionDirection) });
 
 }
 
-function doDirectionalFadeTransition() {
-    //window.cc.save();
-    //    window.cc.setTransform(1, 0, 0, 1, 0, 0);
-    //    window.cc.clearRect(0, 0, window.cc.canvas.clientWidth, window.cc.canvas.clientHeight);
-    //window.cc.restore();
-    clearImage();
+function doDirectionalFadeTransition(currOpacity, currScale, xTransitionDirection, yTransitionDirection) {
+    clearImg();
 
     if (prevImg) {
         var prevOrigin = [imgTopLeft[0], imgTopLeft[1]];
-        //Right and up are +ve
-        if (xDirection > 0) {
-            prevOrigin[0] = prevOrigin[0] + (1 - prevScale) * prevImg.naturalWidth;
-        } else if (yDirection < 0) {
-            prevOrigin[1] = prevOrigin[1] + (1 - prevScale) * prevImg.naturalHeight;
+        //Right and up rotations are positive
+        //For some rotations, origin of image (it's top-left corner) must change as scaling occurs
+        if (xTransitionDirection > 0) {
+            prevOrigin[0] = prevOrigin[0] + currScale * prevImg.naturalWidth;
+        } else if (yTransitionDirection < 0) {
+            prevOrigin[1] = prevOrigin[1] + currScale * prevImg.naturalHeight;
         }
-        window.cc.globalAlpha = prevOpacity;
-            if (xDirection != 0) {
-                window.cc.drawImage(prevImg, 0, 0, prevImg.naturalWidth, prevImg.naturalHeight, prevOrigin[0], prevOrigin[1], prevScale * prevImg.naturalWidth, currImg.naturalHeight);
-            } else if (yDirection != 0) {
-                window.cc.drawImage(prevImg, 0, 0, prevImg.naturalWidth, prevImg.naturalHeight, prevOrigin[0], prevOrigin[1], currImg.naturalWidth, prevScale * prevImg.naturalHeight);
-            }
-            prevScale = prevScale - 0.1;
 
-            prevOpacity = prevOpacity - 0.1;
-        window.cc.globalAlpha = 1.0;
+        window.cc.globalAlpha = 1 - currOpacity;
+        if (xTransitionDirection != 0) {
+            window.cc.drawImage(prevImg, 0, 0, prevImg.naturalWidth, prevImg.naturalHeight, prevOrigin[0], prevOrigin[1], (1 - currScale) * prevImg.naturalWidth, currImg.naturalHeight);
+        } else if (yTransitionDirection != 0) {
+            window.cc.drawImage(prevImg, 0, 0, prevImg.naturalWidth, prevImg.naturalHeight, prevOrigin[0], prevOrigin[1], currImg.naturalWidth, (1 - currScale) * prevImg.naturalHeight);
+        }
     }
 
     var currOrigin = [imgTopLeft[0], imgTopLeft[1]];
-    if (xDirection < 0) {
+    //For some rotations, origin of image (it's top-left corner) must change as scaling occurs
+    if (xTransitionDirection < 0) {
         currOrigin[0] = currOrigin[0] + (1 - currScale) * prevImg.naturalWidth;
-    } else if (yDirection > 0) {
+    } else if (yTransitionDirection > 0) {
         currOrigin[1] = currOrigin[1] + (1 - currScale) * prevImg.naturalHeight;
     }
 
     window.cc.globalAlpha = currOpacity;
-        if (xDirection != 0) {
-            window.cc.drawImage(currImg, 0, 0, currImg.naturalWidth, currImg.naturalHeight, currOrigin[0], currOrigin[1], currScale * currImg.naturalWidth, currImg.naturalHeight);
-        } else if (yDirection != 0) {
-            window.cc.drawImage(currImg, 0, 0, currImg.naturalWidth, currImg.naturalHeight, currOrigin[0], currOrigin[1], currImg.naturalWidth, currScale * currImg.naturalHeight);
-        }
-        currOpacity = currOpacity + 0.1;
-        currScale = currScale + 0.1;
+    if (xTransitionDirection != 0) {
+        window.cc.drawImage(currImg, 0, 0, currImg.naturalWidth, currImg.naturalHeight, currOrigin[0], currOrigin[1], currScale * currImg.naturalWidth, currImg.naturalHeight);
+    } else if (yTransitionDirection != 0) {
+        window.cc.drawImage(currImg, 0, 0, currImg.naturalWidth, currImg.naturalHeight, currOrigin[0], currOrigin[1], currImg.naturalWidth, currScale * currImg.naturalHeight);
+    }
+
     window.cc.globalAlpha = 1.0;
 
+    currOpacity = currOpacity + 0.1;
+    currScale = currScale + 0.1;
+
     if (currOpacity <= 1.0) {
-        requestAnimFrame(doDirectionalFadeTransition);
+        transitionTimerOrId = requestAnimFrame(function() { doDirectionalFadeTransition(currOpacity, currScale, xTransitionDirection, yTransitionDirection) });
     }
 }
+
+
+
+/*
+UTILS
+*/
 
 function mod(a, b) {
     var result = a % b;
@@ -412,4 +442,12 @@ function mod(a, b) {
     return result;
 }
 
-
+//This shim from http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+//Only Firefox seems to support cancelAnimationFrame, so only using its request function
+//for the time being
+window.requestAnimFrame = (function() {
+    return window.mozRequestAnimationFrame    || 
+           function(callback) {
+               window.setTimeout(callback, 1000 / 60);
+           };
+})();
