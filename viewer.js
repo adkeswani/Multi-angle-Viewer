@@ -1,27 +1,52 @@
+var multiAngleViewer = (function() {
+
 var imgs;
 var path;
 var basename;
 var separator;
+
 var numImgs;
 var currImgIndex;
 var currImg;
-var currZoom;
+var prevImg;
 var imgTopLeft;
-var loadingImg;
+
+var currZoom;
 var canvasUninitialised;
+var transition;
+
 var rotateDragStarted;
 var panDragStarted;
-var rotateDragDistance;
-var panDragDistance;
 var dragStart;
-var transition;
-var prevImg;
-var transitioning;
+
 var loadingTimer;
 var autoRotationTimer;
 var transitionTimerOrId;
 
+var userRotateEnabled;
+var userPanEnabled;
+var userZoomEnabled;
 
+var LOADING_ANIM_IMG = new Image();
+LOADING_ANIM_IMG.src = 'loading.png';
+var LOADING_ANIM_FRAME_WIDTH = 31;
+var LOADING_ANIM_FRAME_HEIGHT = 31;
+var LOADING_ANIM_NUM_FRAMES = 8;
+
+var ZOOM_IN_STEP = 1.2;
+var ZOOM_OUT_STEP = 0.8;
+var PAN_STEP = 10;
+
+var ROTATE_DRAG_DISTANCE = 100;
+var PAN_DRAG_DISTANCE = 10;
+
+var ROTATE_BUTTONS_CLASS = 'rotate-button';
+var PAN_BUTTONS_CLASS = 'pan-button';
+var ZOOM_BUTTONS_CLASS = 'zoom-button';
+
+var AUTO_ROTATE_INTERVAL = 3000;
+
+var CLEAR_EXTRA_DISTANCE = 10;
 
 /*
 INITIALISATION
@@ -55,9 +80,6 @@ function initViewer(canvas, _path, _basename, _separator, _extension, numXImages
         }
     }
     currImg = imgs[currImgIndex[0]][currImgIndex[1]];
-
-    loadingImg = new Image();
-    loadingImg.src = 'loading.png';
 
     //Set up mouse events
     window.cc.canvas.onmousedown = startDrag;
@@ -101,6 +123,10 @@ function initCanvas() {
 
     //Find where top-left of image should be positioned
     imgTopLeft = [-imgs[0][0].naturalWidth / 2, -imgs[0][0].naturalHeight / 2];
+
+    userRotateEnabled = true;
+    userPanEnabled = true;
+    userZoomEnabled = true;
 }
 
 
@@ -110,8 +136,16 @@ DRAWING AND LOADING IMAGES
 */
 
 //Draws the current image with or without a transition or starts loading animation if it has not loaded
+//Passing in 0, 0 will prevent a transition from occurring
 function drawCurrImg(xTransitionDirection, yTransitionDirection) {
     window.clearTimeout(loadingTimer);
+
+    //Re-enable zoom and pan for new current image
+    enableButtons(ZOOM_BUTTONS_CLASS);
+    enableButtons(PAN_BUTTONS_CLASS);
+    userZoomEnabled = true;
+    userPanEnabled = true;
+
     if (currImg.hasLoaded) {
         //Cancel existing transition
         if (window.cancelAnimationFrame) {
@@ -119,14 +153,33 @@ function drawCurrImg(xTransitionDirection, yTransitionDirection) {
         } else {
             window.clearTimeout(transitionTimerOrId);
         }
-
+        
         if (xTransitionDirection != 0 || yTransitionDirection != 0) {
-            transition(xTransitionDirection, yTransitionDirection);
+            transition(prevImg, currImg, xTransitionDirection, yTransitionDirection);
+        } else if (currImg.hasOwnProperty('transitionDirection')) {
+            //See else branch
+            transition(prevImg, currImg, currImg.transitionDirection[0], currImg.transitionDirection[1]);
+            delete currImg.transitionDirection;
         } else {
-            noTransition();
+            noTransition(prevImg, currImg);
         }
     } else {
-        //TODO: This prevents transition from occurring!
+        if (prevImg && prevImg.hasLoaded) {
+            //Ensure the previous image is fully drawn
+            noTransition(prevImg, prevImg);
+
+            //Store transition direction so it can be done once image is loaded
+            currImg.transitionDirection = [xTransitionDirection, yTransitionDirection];
+        } else {
+            delete currImg.transitionDirection;
+        }
+
+        //Prevent user from zooming or panning while image is loading
+        disableButtons(ZOOM_BUTTONS_CLASS);
+        disableButtons(PAN_BUTTONS_CLASS);
+        userZoomEnabled = false;
+        userPanEnabled = false;
+
         loadingAnimation(0);
     }
 }
@@ -173,21 +226,21 @@ function stopLoadingAnimation() {
 
     window.cc.save();
         window.cc.setTransform(1, 0, 0, 1, 0, 0);
-        window.cc.clearRect(0, 0, 31, 31);
+        window.cc.clearRect(0, 0, LOADING_ANIM_FRAME_WIDTH, LOADING_ANIM_FRAME_HEIGHT);
     window.cc.restore();
 }
 
 function loadingAnimation(frame) {
     window.cc.save();
         window.cc.setTransform(1, 0, 0, 1, 0, 0);
-        window.cc.drawImage(loadingImg, 31 * frame, 0, 31, 31, 0, 0, 31, 31);
+        window.cc.drawImage(LOADING_ANIM_IMG, LOADING_ANIM_FRAME_WIDTH * frame, 0, LOADING_ANIM_FRAME_WIDTH, LOADING_ANIM_FRAME_HEIGHT, 0, 0, LOADING_ANIM_FRAME_WIDTH, LOADING_ANIM_FRAME_HEIGHT);
     window.cc.restore();
 
-    loadingTimer = window.setTimeout(function() { loadingAnimation(mod(frame + 1, 8)) }, 1000 / 8);
+    loadingTimer = window.setTimeout(function() { loadingAnimation(mod(frame + 1, LOADING_ANIM_NUM_FRAMES)) }, 1000 / LOADING_ANIM_NUM_FRAMES);
 }
 
 function clearImg() {
-    window.cc.clearRect(imgTopLeft[0], imgTopLeft[1], currImg.naturalWidth / currZoom, currImg.naturalHeight / currZoom);
+    window.cc.clearRect(imgTopLeft[0] - CLEAR_EXTRA_DISTANCE, imgTopLeft[1] - CLEAR_EXTRA_DISTANCE, currImg.naturalWidth / currZoom + CLEAR_EXTRA_DISTANCE, currImg.naturalHeight / currZoom + CLEAR_EXTRA_DISTANCE);
 }
 
 
@@ -196,7 +249,12 @@ function clearImg() {
 TRANSFORMATIONS
 */
 
-function rotate(numXRotations, numYRotations) {
+function rotate(numXRotations, numYRotations, userInitiated) {
+    if (typeof userInitiated === 'undefined') { userInitiated = true; }
+    if (userInitiated && !userRotateEnabled) {
+        return;
+    }
+
     currImgIndex = [mod(currImgIndex[0] - numXRotations, numImgs[0]), mod(currImgIndex[1] - numYRotations, numImgs[1])];
     prevImg = currImg;
     currImg = imgs[currImgIndex[0]][currImgIndex[1]];
@@ -204,13 +262,32 @@ function rotate(numXRotations, numYRotations) {
     drawCurrImg(numXRotations, numYRotations);
 }
 
-function pan(xDistance, yDistance) {
-    imgTopLeft = [imgTopLeft[0] + xDistance / currZoom, imgTopLeft[1] + yDistance / currZoom];
+function pan(xSteps, ySteps, userInitiated) {
+    if (typeof userInitiated === 'undefined') { userInitiated = true; }
+    if (userInitiated && !userZoomEnabled) {
+        return;
+    }
+
+    clearImg();
+    imgTopLeft = [imgTopLeft[0] + (xSteps * PAN_STEP) / currZoom, imgTopLeft[1] + (ySteps * PAN_STEP) / currZoom];
     drawCurrImg(0, 0);
 }
 
-function zoom(amount) {
-    window.cc.clearRect(imgTopLeft[0], imgTopLeft[1], currImg.naturalWidth, currImg.naturalHeight);
+function zoom(steps, userInitiated) {
+    if (typeof userInitiated === 'undefined') { userInitiated = true; }
+    if (userInitiated && !userZoomEnabled) {
+        return;
+    }
+
+    clearImg();
+
+    var amount = 1;
+    if (steps > 0) {
+        amount = Math.pow(ZOOM_IN_STEP, steps);
+    } else if (steps < 0) {
+        amount = Math.pow(ZOOM_OUT_STEP, -steps);
+    }
+
     window.cc.scale(amount,amount);
     currZoom = currZoom * amount;
     drawCurrImg(0, 0);
@@ -236,9 +313,9 @@ function mouseZoom(e) {
     }
     
     if (nDelta > 0) {
-        zoom(1.2);
+        zoom(1);
     } else {
-        zoom(0.8);
+        zoom(-1);
     }
 }
 
@@ -256,38 +333,41 @@ function startDrag(e) {
 }
 
 function doDrag(e) {
-    var transform;
+    if (typeof dragStart === 'undefined') { return; }
+
+    var xDragDistance = e.screenX - dragStart[0];
+    var yDragDistance = e.screenY - dragStart[1];
 
     if (rotateDragStarted) {
-        if (e.screenX - dragStart[0] >= 100) {
+        if (xDragDistance >= ROTATE_DRAG_DISTANCE) {
             rotate(1, 0);
             dragStart[0] = e.screenX;
-        } else if (e.screenX - dragStart[0] <= -100) {
+        } else if (xDragDistance <= -ROTATE_DRAG_DISTANCE) {
             rotate(-1, 0);
             dragStart[0] = e.screenX;
         }
         
-        if (e.screenY - dragStart[1] >= 100) {
+        if (yDragDistance >= ROTATE_DRAG_DISTANCE) {
             rotate(0, -1);
             dragStart[1] = e.screenY;
-        } else if (e.screenY - dragStart[1] <= -100) {
+        } else if (yDragDistance <= -ROTATE_DRAG_DISTANCE) {
             rotate(0, 1);
             dragStart[1] = e.screenY;
         }
     } else if (panDragStarted) {
-        if (e.screenX - dragStart[0] >= 10) {
-            pan(10, 0);
+        if (xDragDistance >= PAN_DRAG_DISTANCE) {
+            pan(1, 0);
             dragStart[0] = e.screenX;
-        } else if (e.screenX - dragStart[0] <= -10) {
-            pan(-10, 0);
+        } else if (xDragDistance <= -PAN_DRAG_DISTANCE) {
+            pan(-1, 0);
             dragStart[0] = e.screenX;
         }
         
-        if (e.screenY - dragStart[1] >= 10) {
-            pan(0, 10);
+        if (yDragDistance >= PAN_DRAG_DISTANCE) {
+            pan(0, 1);
             dragStart[1] = e.screenY;
-        } else if (e.screenY - dragStart[1] <= -10) {
-            pan(0, -10);
+        } else if (yDragDistance <= -PAN_DRAG_DISTANCE) {
+            pan(0, -1);
             dragStart[1] = e.screenY;
         }
     }
@@ -305,32 +385,38 @@ AUTO-ROTATE AND OTHER
 */
 
 function resetPanAndZoom() {
+    clearImg();
     window.cc.setTransform(1, 0, 0, 1, 0, 0);
     initCanvas();
     drawCurrImg(0, 0);
 }
 
-function autoRotateOn() {
-    autoRotationTimer = window.setTimeout(function() { autoRotate(0) }, 3000);
-    //Disable all rotation buttons?
+function startAutoRotate() {
+    disableButtons(ROTATE_BUTTONS_CLASS);
+    userRotateEnabled = false;
+
+    autoRotationTimer = window.setTimeout(function() { autoRotate(0) }, AUTO_ROTATE_INTERVAL);
 }
 
-function autoRotateOff() {
+function stopAutoRotate() {
+    enableButtons(ROTATE_BUTTONS_CLASS);
+    userRotateEnabled = true;
+
     window.clearTimeout(autoRotationTimer);
 }
 
 function autoRotate(numRotations) {
     if (currImg.hasLoaded) {
         if (numRotations == numImgs[0]) {
-            rotate(0, -1);
+            rotate(0, -1, false);
             numRotations = 0;
         } else {
-            rotate(1, 0)
+            rotate(1, 0, false);
             numRotations = numRotations + 1;
         }
-        autoRotationTimer = window.setTimeout(function() { autoRotate(numRotations) }, 3000);
+        autoRotationTimer = window.setTimeout(function() { autoRotate(numRotations) }, AUTO_ROTATE_INTERVAL);
     } else {
-        autoRotationTimer = window.setTimeout(function() { autoRotate(numRotations) }, 100); //Not sure if this is working :/, can't tell
+        autoRotationTimer = window.setTimeout(function() { autoRotate(numRotations) }, 100);
     }
 }
 
@@ -341,21 +427,18 @@ TRANSITIONS
 */
 
 //Changes straight to the next image
-function noTransition(xTransitionDirection, yTransitionDirection) {
-    window.cc.save();
-        window.cc.setTransform(1, 0, 0, 1, 0, 0);
-        window.cc.clearRect(0, 0, window.cc.canvas.clientWidth, window.cc.canvas.clientHeight);
-    window.cc.restore();
+function noTransition(prevImg, currImg, xTransitionDirection, yTransitionDirection) {
+    clearImg();
     window.cc.drawImage(currImg, imgTopLeft[0], imgTopLeft[1]);
 }
 
 //Fades between images
-function fadeTransition(xTransitionDirection, yTransitionDirection) {
+function fadeTransition(prevImg, currImg, xTransitionDirection, yTransitionDirection) {
     var currOpacity = 0.0;
-    transitionTimerOrId = requestAnimFrame(function() { doFadeTransition(currOpacity) } );
+    transitionTimerOrId = requestAnimFrame(function() { doFadeTransition(prevImg, currImg, currOpacity) } );
 }
 
-function doFadeTransition(currOpacity) {
+function doFadeTransition(prevImg, currImg, currOpacity) {
     clearImg();
 
     if (prevImg) {
@@ -370,19 +453,19 @@ function doFadeTransition(currOpacity) {
     window.cc.globalAlpha = 1.0;
 
     if (currOpacity <= 1.0) {
-        transitionTimerOrId = requestAnimFrame(function() { doFadeTransition(currOpacity) });
+        transitionTimerOrId = requestAnimFrame(function() { doFadeTransition(prevImg, currImg, currOpacity) });
     }
 }
 
 //Fades between images while scaling in the direction of rotation
-function directionalFadeTransition(xTransitionDirection, yTransitionDirection) {
+function directionalFadeTransition(prevImg, currImg, xTransitionDirection, yTransitionDirection) {
     var currOpacity = 0.0;
     var currScale = 0.0;
-    transitionTimerOrId = requestAnimFrame(function() { doDirectionalFadeTransition(currOpacity, currScale, xTransitionDirection, yTransitionDirection) });
+    transitionTimerOrId = requestAnimFrame(function() { doDirectionalFadeTransition(prevImg, currImg, currOpacity, currScale, xTransitionDirection, yTransitionDirection) });
 
 }
 
-function doDirectionalFadeTransition(currOpacity, currScale, xTransitionDirection, yTransitionDirection) {
+function doDirectionalFadeTransition(prevImg, currImg, currOpacity, currScale, xTransitionDirection, yTransitionDirection) {
     clearImg();
 
     if (prevImg) {
@@ -424,7 +507,7 @@ function doDirectionalFadeTransition(currOpacity, currScale, xTransitionDirectio
     currScale = currScale + 0.1;
 
     if (currOpacity <= 1.0) {
-        transitionTimerOrId = requestAnimFrame(function() { doDirectionalFadeTransition(currOpacity, currScale, xTransitionDirection, yTransitionDirection) });
+        transitionTimerOrId = requestAnimFrame(function() { doDirectionalFadeTransition(prevImg, currImg, currOpacity, currScale, xTransitionDirection, yTransitionDirection) });
     }
 }
 
@@ -450,4 +533,36 @@ window.requestAnimFrame = (function() {
            function(callback) {
                window.setTimeout(callback, 1000 / 60);
            };
+})();
+
+function disableButtons(buttonsClass) {
+    var buttons = document.getElementsByClassName(buttonsClass);
+    for (var i = 0; i < buttons.length; i++) {
+        buttons[i].disabled = true;
+    }
+}
+
+function enableButtons(buttonsClass) {
+    var buttons = document.getElementsByClassName(buttonsClass);
+    for (var i = 0; i < buttons.length; i++) {
+        buttons[i].disabled = false;
+    }
+}
+
+return {
+    initViewer : initViewer,
+
+    rotate : rotate,
+    pan : pan,
+    zoom : zoom,
+
+    startAutoRotate : startAutoRotate,
+    stopAutoRotate : stopAutoRotate,
+    resetPanAndZoom : resetPanAndZoom,
+
+    noTransition : noTransition,
+    fadeTransition : fadeTransition,
+    directionalFadeTransition : directionalFadeTransition
+};
+
 })();

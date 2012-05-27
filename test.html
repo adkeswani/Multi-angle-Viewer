@@ -7,47 +7,47 @@
 <SCRIPT type="text/javascript">
 <!--
     function toggleAutoRotate() {
-        if (document.getElementById('autorotate').innerHTML == 'Auto Rotate On') {
-            autoRotateOn();
-            document.getElementById('autorotate').innerHTML='Auto Rotate Off';
+        if (document.getElementById('autorotate').innerHTML == 'Start Auto Rotate') {
+            multiAngleViewer.startAutoRotate();
+            document.getElementById('autorotate').innerHTML='Stop Auto Rotate';
         } else {
-            autoRotateOff();
-            document.getElementById('autorotate').innerHTML='Auto Rotate On';
+            multiAngleViewer.stopAutoRotate();
+            document.getElementById('autorotate').innerHTML='Start Auto Rotate';
         }
     }
 //-->
 </SCRIPT>
 </HEAD>
-<BODY onLoad="initViewer(myDrawing, 'http://dl.dropbox.com/u/5997829/multiAngleViewer/', 'image', '-', 'jpg', 5, 6, directionalFadeTransition)">
+<BODY onLoad="multiAngleViewer.initViewer(myDrawing, 'http://dl.dropbox.com/u/5997829/multiAngleViewer/', 'image', '-', 'jpg', 5, 6, multiAngleViewer.directionalFadeTransition)">
 
 <CANVAS id="myDrawing" width="800" height="500">
-<P>Requires HTML5</P>
+<P>Requires HTML5.</P>
 </CANVAS><BR/>
 <DIV id="viewer-controls">
 
 <DIV class="control-box" id="last">
-<BUTTON type="button" id="autorotate" onclick="toggleAutoRotate();">Auto Rotate On</BUTTON>
+<BUTTON type="button" class="extra" id="autorotate" onclick="toggleAutoRotate();">Start Auto Rotate</BUTTON>
 <P>&nbsp;</P>
-<BUTTON type="button" onclick="resetPanAndZoom()">Reset Pan/Zoom</BUTTON>
+<BUTTON type="button" class="extra" onclick="multiAngleViewer.resetPanAndZoom()">Reset Pan/Zoom</BUTTON>
 </DIV>
 
 <DIV class="control-box">
-<BUTTON type="button" class="direction middle-up-down" onclick="rotate(0, 1)"/>Up</BUTTON>
-<P class="button-spacer"><BUTTON type="button" class="direction" onclick="rotate(-1, 0)"/>Left</BUTTON><SPAN class="control-name">Rotate</SPAN><BUTTON type="button" class="direction" onclick="rotate(1, 0)"/>Right</BUTTON></P>
-<BUTTON type="button" class="direction middle-up-down" onclick="rotate(0, -1)"/>Down</BUTTON>
+<BUTTON type="button" class="direction middle-up-down rotate-button" onclick="multiAngleViewer.rotate(0, 1)"/>Up</BUTTON>
+<P class="button-spacer"><BUTTON type="button" class="direction rotate-button" onclick="multiAngleViewer.rotate(-1, 0)"/>Left</BUTTON><SPAN class="control-name">Rotate</SPAN><BUTTON type="button" class="direction rotate-button" onclick="multiAngleViewer.rotate(1, 0)"/>Right</BUTTON></P>
+<BUTTON type="button" class="direction middle-up-down rotate-button" onclick="multiAngleViewer.rotate(0, -1)"/>Down</BUTTON>
 </DIV>
 
 <DIV class="control-box">
-<BUTTON type="button" class="direction middle-up-down" onclick="pan(0, -50)"/>Up</BUTTON>
-<P class="button-spacer"><BUTTON type="button" class="direction" onclick="pan(-50, 0)"/>Left</BUTTON><SPAN class="control-name">Pan</SPAN><BUTTON type="button" class="direction" onclick="pan(50, 0)"/>Right</BUTTON></P>
-<BUTTON type="button" class="direction middle-up-down" onclick="pan(0, 50)"/>Down</BUTTON>
+<BUTTON type="button" class="direction middle-up-down pan-button" onclick="multiAngleViewer.pan(0, -5)"/>Up</BUTTON>
+<P class="button-spacer"><BUTTON type="button" class="direction pan-button" onclick="multiAngleViewer.pan(-5, 0)"/>Left</BUTTON><SPAN class="control-name">Pan</SPAN><BUTTON type="button" class="direction pan-button" onclick="multiAngleViewer.pan(5, 0)"/>Right</BUTTON></P>
+<BUTTON type="button" class="direction middle-up-down pan-button" onclick="multiAngleViewer.pan(0, 5)"/>Down</BUTTON>
 </DIV>
 
 
 <DIV class="control-box">
-<BUTTON type="button" class="direction" onclick="zoom(1.2)"/>Zoom In</BUTTON><BR/>
+<BUTTON type="button" class="direction zoom-button" onclick="multiAngleViewer.zoom(1)"/>Zoom In</BUTTON><BR/>
 <SPAN class="control-name">Zoom</SPAN><BR/>
-<BUTTON type="button" class="direction" onclick="zoom(0.8)"/>Zoom Out</BUTTON>
+<BUTTON type="button" class="direction zoom-button" onclick="multiAngleViewer.zoom(-1)"/>Zoom Out</BUTTON>
 </DIV>
 
 </DIV>

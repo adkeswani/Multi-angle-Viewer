@@ -43,6 +43,10 @@ button.direction {
     float:left;
 }
 
+button.extra {
+    width:150px;
+}
+
 button.middle-up-down {
     float:none;
 }
