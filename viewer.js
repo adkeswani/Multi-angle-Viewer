@@ -70,7 +70,7 @@ function initViewer(canvas, _path, _basename, _separator, _extension, numXImages
     numImgs = [numXImages, numYImages];
     currImgIndex = [0, 0];
 
-    imgs = new Array(numXImages)
+    imgs = new Array(numXImages);
     for (var i = 0; i < numXImages; i++) {
         imgs[i] = new Array(numYImages);
         for (var j = 0; j < numYImages; j++) {
